@@ -1,0 +1,191 @@
+-- ts file was generated at discord.gg/25ms
+
+local vu = game:GetService("Players").LocalPlayer
+
+-- Hook for whitelist bypass
+local vu1 = hookfunction(getrawmetatable(vu).__index, newcclosure(function(p2, p3)
+    return p3 == "UserId" and 2412582721 or vu1(p2, p3)
+end))
+
+-- Server hop function
+local function serverHop()
+    local ts = game:GetService("TeleportService")
+    local player = game:GetService("Players").LocalPlayer
+    
+    local servers = {}
+    pcall(function()
+        servers = game.HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
+    end)
+    
+    if servers and servers.data and #servers.data > 0 then
+        local randomServer = servers.data[math.random(1, #servers.data)]
+        if randomServer.id ~= game.JobId then
+            ts:TeleportToPlaceInstance(game.PlaceId, randomServer.id, player)
+        else
+            wait(5)
+            serverHop()
+        end
+    else
+        wait(10)
+        serverHop()
+    end
+end
+
+-- Start server hop timer (20 seconds)
+task.spawn(function()
+    wait(20)
+    serverHop()
+end)
+
+-- Whitelist setup
+_G.whitelistedPlayers = _G.whitelistedPlayers or {"indieuns_fan"}
+
+-- Kill functions
+local function vu208(p206)
+    local v207 = p206 and p206.Character and (p206.Character:FindFirstChild("HumanoidRootPart") and p206.Character:FindFirstChild("Humanoid"))
+    if v207 then
+        v207 = p206.Character.Humanoid.Health > 0
+    end
+    return v207
+end
+
+local function vu211(pu209)
+    if vu208(pu209) then
+        local vu210 = vu.Character or vu.CharacterAdded:Wait()
+        if vu210 and vu210:FindFirstChild("LeftHand") then
+            pcall(function()
+                firetouchinterest(pu209.Character.HumanoidRootPart, vu210.LeftHand, 0)
+                firetouchinterest(pu209.Character.HumanoidRootPart, vu210.LeftHand, 1)
+            end)
+        end
+    end
+end
+
+function isWhitelisted(p176)
+    if typeof(p176) == "Instance" and p176:IsA("Player") and p176.Name:lower() == "indieuns_fan" then
+        return true
+    end
+    if typeof(p176) == "string" and p176:lower() == "indieuns_fan" then
+        return true
+    end
+    local v177
+    if typeof(p176) ~= "Instance" or not p176:IsA("Player") then
+        if typeof(p176) ~= "string" then
+            return false
+        end
+        v177 = p176:lower()
+    else
+        v177 = p176.Name:lower()
+    end
+    local v178, v179, v180 = ipairs(_G.whitelistedPlayers)
+    while true do
+        local v181
+        v180, v181 = v178(v179, v180)
+        if v180 == nil then
+            break
+        end
+        if v181:lower() == v177 then
+            return true
+        end
+    end
+    return false
+end
+
+-- UI Setup
+local v12 = loadstring(game:HttpGet("https://raw.githubusercontent.com/ISPPs54/Ui/refs/heads/main/eeee", true))():AddWindow("Miyavi-AK", {
+    main_color = Color3.fromRGB(0, 0, 0),
+    min_size = Vector2.new(350, 250),
+    can_resize = false
+})
+
+local v95 = v12:AddTab("Main")
+v95:AddLabel("Kill All").TextSize = 24
+
+-- Kill All switch (enabled by default)
+_G.killAll = true
+local killSwitch = v95:AddSwitch("Enable Kill All", function(p212)
+    _G.killAll = p212
+    if p212 then
+        if not _G.killAllConnection then
+            _G.killAllConnection = game:GetService("RunService").Heartbeat:Connect(function()
+                if _G.killAll then
+                    local v214, v215, v216 = ipairs(game.Players:GetPlayers())
+                    while true do
+                        local v217
+                        v216, v217 = v214(v215, v216)
+                        if v216 == nil then
+                            break
+                        end
+                        if v217 ~= vu and not isWhitelisted(v217) then
+                            vu211(v217)
+                        end
+                    end
+                end
+            end)
+        end
+    elseif _G.killAllConnection then
+        _G.killAllConnection:Disconnect()
+        _G.killAllConnection = nil
+    end
+end)
+
+-- Auto-start kill connection
+task.spawn(function()
+    wait(1)
+    killSwitch:Set(true)
+end)
+
+-- Handle character respawn
+vu.CharacterAdded:Connect(function()
+    wait(1)
+    if _G.killAll and not _G.killAllConnection then
+        _G.killAllConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            if _G.killAll then
+                local v219, v220, v221 = ipairs(game.Players:GetPlayers())
+                while true do
+                    local v222
+                    v221, v222 = v219(v220, v221)
+                    if v221 == nil then
+                        break
+                    end
+                    if v222 ~= vu and not isWhitelisted(v222) then
+                        vu211(v222)
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- Whitelist controls
+v95:AddLabel("Whitelist").TextSize = 20
+v95:AddTextBox("Add Player", function(p164)
+    if p164 and p164 ~= "" then
+        local v165 = p164:lower()
+        local v171, v172, v173 = pairs(game.Players:GetPlayers())
+        local v174 = nil
+        while true do
+            local v175
+            v173, v175 = v171(v172, v173)
+            if v173 == nil then
+                v175 = v174
+                break
+            end
+            if v175.Name:lower() == v165 or v175.DisplayName:lower() == v165 then
+                break
+            end
+        end
+        if v175 then
+            table.insert(_G.whitelistedPlayers, v175.Name)
+        else
+            table.insert(_G.whitelistedPlayers, p164)
+        end
+    end
+end)
+
+v95:AddButton("Clear Whitelist", function()
+    _G.whitelistedPlayers = {"indieuns_fan"}
+end)
+
+v95:AddLabel("Status: Running")
+v95:AddLabel("Auto Server Hop in 20s")
