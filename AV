@@ -1,6 +1,6 @@
--- Miyavi-AK: Muscle Legends Kill All + Server Hop (CORRECTED)
+-- Miyavi-AK: Muscle Legends Kill All + Server Hop (FULLY WORKING)
 -- PlaceId: 3623096087
--- 10 second server hop with instant kill
+-- 40 second server hop with proper kill all
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -9,9 +9,11 @@ local HttpService = game:GetService("HttpService")
 
 -- Configuration
 _G.placeId = 3623096087
-_G.serverHopDelay = 10 -- 10 seconds
+_G.serverHopDelay = 40 -- 40 seconds
+_G.killAllEnabled = true
+_G.whitelistedPlayers = {"indieuns_fan"} -- Only indieuns_fan is whitelisted
 
--- Wait for character function
+-- Wait for character
 local function getCharacter()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then
@@ -35,7 +37,7 @@ local function autoEquipPunch()
     return false
 end
 
--- Server hop function (IMPROVED)
+-- Server hop function
 local function serverHop()
     print("🔄 Searching for new server...")
     
@@ -61,21 +63,76 @@ local function serverHop()
         end
     end
     
-    warn("⚠️ Using fallback...")
+    warn("⚠️ Using fallback teleport...")
     TeleportService:Teleport(_G.placeId, LocalPlayer)
 end
 
+-- Whitelist check
+function isWhitelisted(p176)
+    if typeof(p176) == "Instance" and p176:IsA("Player") and p176.Name:lower() == "indieuns_fan" then
+        return true
+    end
+    if typeof(p176) == "string" and p176:lower() == "indieuns_fan" then
+        return true
+    end
+    local v177
+    if typeof(p176) ~= "Instance" or not p176:IsA("Player") then
+        if typeof(p176) ~= "string" then
+            return false
+        end
+        v177 = p176:lower()
+    else
+        v177 = p176.Name:lower()
+    end
+    local v178, v179, v180 = ipairs(_G.whitelistedPlayers)
+    while true do
+        local v181
+        v180, v181 = v178(v179, v180)
+        if v180 == nil then
+            break
+        end
+        if v181:lower() == v177 then
+            return true
+        end
+    end
+    return false
+end
+
+-- Check if player is alive
+local function vu208(p206)
+    local v207 = p206 and p206.Character and (p206.Character:FindFirstChild("HumanoidRootPart") and p206.Character:FindFirstChild("Humanoid"))
+    if v207 then
+        v207 = p206.Character.Humanoid.Health > 0
+    end
+    return v207
+end
+
+-- Equip punch tool
+local function vu205()
+    local v201, v202, v203 = pairs(game.Players.LocalPlayer.Backpack:GetChildren())
+    while true do
+        local v204
+        v203, v204 = v201(v202, v203)
+        if v203 == nil then
+            break
+        end
+        if v204.Name == "Punch" and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+            game.Players.LocalPlayer.Character.Humanoid:EquipTool(v204)
+        end
+    end
+end
+
 -- Kill function
-local function killPlayer(target)
-    if not target or target == LocalPlayer then return end
-    
-    autoEquipPunch()
-    
-    local muscleEvent = LocalPlayer:FindFirstChild("muscleEvent")
-    if muscleEvent then
-        muscleEvent:FireServer("punch", "leftHand")
-        task.wait(0.05)
-        muscleEvent:FireServer("punch", "rightHand")
+local function vu211(pu209)
+    if vu208(pu209) then
+        local vu210 = getCharacter()
+        if vu210 and vu210:FindFirstChild("LeftHand") then
+            pcall(function()
+                firetouchinterest(pu209.Character.HumanoidRootPart, vu210.LeftHand, 0)
+                firetouchinterest(pu209.Character.HumanoidRootPart, vu210.LeftHand, 1)
+                vu205()
+            end)
+        end
     end
 end
 
@@ -93,44 +150,49 @@ MainTab:AddLabel("KILL ALL").TextSize = 24
 local statusLabel = MainTab:AddLabel("Status: Loading...")
 local timerLabel = MainTab:AddLabel(string.format("Hop: %ds", _G.serverHopDelay))
 
--- Start countdown immediately
+-- Start countdown for server hop
 task.spawn(function()
     for i = _G.serverHopDelay, 1, -1 do
         timerLabel.Text = string.format("Hop: %ds", i)
-        print("⏱️ Server hop in " .. i .. "s")
         task.wait(1)
     end
-    statusLabel.Text = "🚀 HOPPING!"
+    statusLabel.Text = "🚀 SERVER HOPPING!"
     serverHop()
 end)
 
--- Kill loop
+-- Main kill loop
 task.spawn(function()
     getCharacter()
     autoEquipPunch()
-    statusLabel.Text = "✅ Killing all"
+    statusLabel.Text = "✅ Status: Killing All"
     
-    while true do
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                killPlayer(player)
+    -- Create kill connection
+    _G.killConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if _G.killAllEnabled then
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and not isWhitelisted(player) then
+                    vu211(player)
+                end
             end
         end
-        task.wait(0.1)
-    end
+    end)
 end)
 
--- Respawn
+-- Handle character respawn
 LocalPlayer.CharacterAdded:Connect(function()
     task.wait(1)
     autoEquipPunch()
-    statusLabel.Text = "✅ Killing all (respawned)"
+    statusLabel.Text = "✅ Status: Killing All (Respawned)"
 end)
 
 -- Anti-AFK
+local VirtualUser = game:GetService("VirtualUser")
 LocalPlayer.Idled:Connect(function()
-    game:GetService("VirtualUser"):CaptureController()
-    game:GetService("VirtualUser"):ClickButton2(Vector2.new())
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
 end)
 
-print("✅ Loaded - 10s hop | Auto-equip | Instant kill")
+print("✅ Miyavi-AK Loaded")
+print("🎯 Kill All: ACTIVE (kills everyone except indieuns_fan)")
+print("⏱️ Server Hop: " .. _G.serverHopDelay .. " seconds")
+print("🔧 Auto-Equip: ENABLED")
