@@ -1,147 +1,154 @@
--- Miyavi-AK: Kill All + Server Hop
--- Optimized for Muscle Legends
+-- Miyavi-AK: Muscle Legends Kill All + Auto Server Hop
+-- PlaceId: 3623096087
+-- Features: Kill all players, auto-equip punch, server hop every 10s, no whitelist
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TeleportService = game:GetService("TeleportService")
-local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local VirtualUser = game:GetService("VirtualUser")
 
--- Force enable kill all at startup
-_G.killAllEnabled = true
+-- Configuration
+_G.placeId = 3623096087
+_G.serverHopDelay = 10 -- seconds
 
--- Whitelist (indieuns_fan is permanently whitelisted)
-_G.whitelistedPlayers = {"indieuns_fan"}
-
--- Enhanced UserId spoof
-local originalIndex
-originalIndex = hookfunction(getrawmetatable(LocalPlayer).__index, newcclosure(function(self, key)
-    if key == "UserId" then
-        return 2412582721
+-- Auto-equip punch tool
+local function autoEquipPunch()
+    local punch = LocalPlayer.Backpack:FindFirstChild("Punch")
+    if punch then
+        local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid:EquipTool(punch)
+            return true
+        end
     end
-    return originalIndex(self, key)
-end))
+    return false
+end
 
 -- Server hop function
 local function serverHop()
-    local success, result = pcall(function()
-        local servers = game.HttpService:JSONDecode(
-            game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
-        )
-        
-        if servers and servers.data and #servers.data > 0 then
-            local availableServers = {}
-            for _, server in ipairs(servers.data) do
-                if server.id ~= game.JobId and server.playerCount and server.playerCount < server.maxPlayers then
-                    table.insert(availableServers, server)
-                end
-            end
-            
-            if #availableServers > 0 then
-                local targetServer = availableServers[math.random(1, #availableServers)]
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, targetServer.id, LocalPlayer)
-                return true
-            end
-        end
-        return false
+    print("🔄 Starting server hop...")
+    
+    local success, response = pcall(function()
+        local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100", _G.placeId)
+        return HttpService:JSONDecode(HttpService:GetAsync(url, true))
     end)
     
-    if not success or not result then
-        wait(10)
-        serverHop()
+    if success and response and response.data then
+        local available = {}
+        for _, server in ipairs(response.data) do
+            if server.id ~= game.JobId and server.playing and server.maxPlayers and server.playing < server.maxPlayers then
+                table.insert(available, server)
+            end
+        end
+        
+        if #available > 0 then
+            local target = available[math.random(1, #available)]
+            print("✅ Teleporting to server: " .. target.id)
+            TeleportService:TeleportToPlaceInstance(_G.placeId, target.id, LocalPlayer)
+            return
+        end
     end
+    
+    -- Fallback
+    warn("⚠️ Using fallback teleport...")
+    TeleportService:Teleport(_G.placeId, LocalPlayer)
 end
 
--- Start server hop timer (20 seconds)
+-- Start server hop countdown
 task.spawn(function()
-    wait(20)
+    for i = _G.serverHopDelay, 1, -1 do
+        print("⏱️ Server hop in " .. i .. " seconds")
+        task.wait(1)
+    end
+    print("🚀 Server hopping now!")
     serverHop()
 end)
 
--- Kill function using muscleEvent (most reliable for Muscle Legends)
-local function killPlayer(targetPlayer)
-    if not targetPlayer or targetPlayer == LocalPlayer then return end
+-- Kill function
+local function killPlayer(target)
+    if not target or target == LocalPlayer then return end
     
-    local character = LocalPlayer.Character
-    local targetChar = targetPlayer.Character
+    -- Ensure we have punch equipped
+    autoEquipPunch()
     
-    if not character or not targetChar then return end
-    
-    local targetHumanoid = targetChar:FindFirstChild("Humanoid")
-    if not targetHumanoid or targetHumanoid.Health <= 0 then return end
-    
-    if table.find(_G.whitelistedPlayers, targetPlayer.Name:lower()) then return end
-    
-    -- Primary kill method: muscleEvent
+    -- Primary kill method
     local muscleEvent = LocalPlayer:FindFirstChild("muscleEvent")
     if muscleEvent then
         muscleEvent:FireServer("punch", "leftHand")
         muscleEvent:FireServer("punch", "rightHand")
     end
     
-    -- Backup method: firetouchinterest
+    -- Backup touch method
     pcall(function()
-        local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
-        local leftHand = character:FindFirstChild("LeftHand")
-        if targetHRP and leftHand then
-            firetouchinterest(targetHRP, leftHand, 0)
-            firetouchinterest(targetHRP, leftHand, 1)
+        local targetChar = target.Character
+        local myChar = LocalPlayer.Character
+        if targetChar and myChar then
+            local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
+            local leftHand = myChar:FindFirstChild("LeftHand")
+            if targetHRP and leftHand then
+                firetouchinterest(targetHRP, leftHand, 0)
+                firetouchinterest(targetHRP, leftHand, 1)
+            end
         end
     end)
 end
 
--- UI Setup
+-- Simple UI
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/ISPPs54/Ui/refs/heads/main/eeee", true))()
 local Window = Library:AddWindow("Miyavi-AK", {
     main_color = Color3.fromRGB(255, 0, 0),
-    min_size = Vector2.new(300, 200),
+    min_size = Vector2.new(320, 180),
     can_resize = false
 })
 
 local MainTab = Window:AddTab("Main")
+MainTab:AddLabel("Kill All Mode").TextSize = 24
 
--- Kill All toggle
-_G.killAllActive = true
-MainTab:AddSwitch("Kill All Players", function(state)
-    _G.killAllActive = state
-end):Set(true)
-
--- Whitelist management
-MainTab:AddLabel("Whitelist").TextSize = 20
-local whitelistLabel = MainTab:AddLabel("Whitelisted: indieuns_fan")
-
-MainTab:AddTextBox("Add Player", function(text)
-    if text and text ~= "" then
-        table.insert(_G.whitelistedPlayers, text:lower())
-        whitelistLabel.Text = "Whitelisted: " .. table.concat(_G.whitelistedPlayers, ", ")
-    end
-end)
-
-MainTab:AddButton("Clear All", function()
-    _G.whitelistedPlayers = {"indieuns_fan"}
-    whitelistLabel.Text = "Whitelisted: indieuns_fan"
-end)
-
--- Status
-MainTab:AddLabel("Status: Active")
-MainTab:AddLabel("Server Hop: 20s")
+local statusLabel = MainTab:AddLabel("Status: Starting...")
+local timerLabel = MainTab:AddLabel(string.format("Server Hop: %ds", _G.serverHopDelay))
 
 -- Main kill loop
 task.spawn(function()
+    statusLabel.Text = "✅ Status: Running"
+    
+    -- Ensure character loads first
+    LocalPlayer.CharacterAdded:Wait()
+    task.wait(1)
+    autoEquipPunch()
+    
     while true do
-        if _G.killAllActive then
-            for _, player in ipairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer and not table.find(_G.whitelistedPlayers, player.Name:lower()) then
-                    killPlayer(player)
-                end
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                killPlayer(player)
             end
         end
-        wait(0.1)
+        task.wait(0.1)
     end
 end)
 
--- Respawn handler
+-- Character respawn handler
 LocalPlayer.CharacterAdded:Connect(function()
-    wait(2)
-    _G.killAllActive = true
+    task.wait(1)
+    autoEquipPunch()
+    statusLabel.Text = "✅ Status: Running (Respawned)"
 end)
+
+-- Anti-AFK
+LocalPlayer.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
+end)
+
+-- Cleanup on GUI close
+game:GetService("CoreGui").ChildRemoved:Connect(function(child)
+    if child.Name:find("Miyavi") then
+        _G.killAllEnabled = false
+    end
+end)
+
+print("✅ Miyavi-AK Loaded")
+print("🎯 Kill All: ACTIVE")
+print("⏱️ Server Hop: " .. _G.serverHopDelay .. " seconds")
+print("🔧 Auto-Equip: ENABLED")
