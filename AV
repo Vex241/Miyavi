@@ -1,35 +1,45 @@
--- Miyavi-AK: Muscle Legends Kill All + Auto Server Hop
+-- Miyavi-AK: Muscle Legends Kill All + Server Hop (CORRECTED)
 -- PlaceId: 3623096087
--- Features: Kill all players, auto-equip punch, server hop every 10s, no whitelist
+-- 10 second server hop with instant kill
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
-local VirtualUser = game:GetService("VirtualUser")
 
 -- Configuration
 _G.placeId = 3623096087
-_G.serverHopDelay = 10 -- seconds
+_G.serverHopDelay = 10 -- 10 seconds
 
--- Auto-equip punch tool
+-- Wait for character function
+local function getCharacter()
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then
+        char = LocalPlayer.CharacterAdded:Wait()
+        char:WaitForChild("HumanoidRootPart")
+    end
+    return char
+end
+
+-- Auto equip punch
 local function autoEquipPunch()
-    local punch = LocalPlayer.Backpack:FindFirstChild("Punch")
+    local backpack = LocalPlayer:WaitForChild("Backpack")
+    local character = getCharacter()
+    local humanoid = character:WaitForChild("Humanoid")
+    
+    local punch = backpack:FindFirstChild("Punch")
     if punch then
-        local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid:EquipTool(punch)
-            return true
-        end
+        humanoid:EquipTool(punch)
+        return true
     end
     return false
 end
 
--- Server hop function
+-- Server hop function (IMPROVED)
 local function serverHop()
-    print("🔄 Starting server hop...")
+    print("🔄 Searching for new server...")
     
+    local currentJobId = game.JobId
     local success, response = pcall(function()
         local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100", _G.placeId)
         return HttpService:JSONDecode(HttpService:GetAsync(url, true))
@@ -38,7 +48,7 @@ local function serverHop()
     if success and response and response.data then
         local available = {}
         for _, server in ipairs(response.data) do
-            if server.id ~= game.JobId and server.playing and server.maxPlayers and server.playing < server.maxPlayers then
+            if server.id ~= currentJobId and server.playing < server.maxPlayers then
                 table.insert(available, server)
             end
         end
@@ -51,72 +61,54 @@ local function serverHop()
         end
     end
     
-    -- Fallback
-    warn("⚠️ Using fallback teleport...")
+    warn("⚠️ Using fallback...")
     TeleportService:Teleport(_G.placeId, LocalPlayer)
 end
-
--- Start server hop countdown
-task.spawn(function()
-    for i = _G.serverHopDelay, 1, -1 do
-        print("⏱️ Server hop in " .. i .. " seconds")
-        task.wait(1)
-    end
-    print("🚀 Server hopping now!")
-    serverHop()
-end)
 
 -- Kill function
 local function killPlayer(target)
     if not target or target == LocalPlayer then return end
     
-    -- Ensure we have punch equipped
     autoEquipPunch()
     
-    -- Primary kill method
     local muscleEvent = LocalPlayer:FindFirstChild("muscleEvent")
     if muscleEvent then
         muscleEvent:FireServer("punch", "leftHand")
+        task.wait(0.05)
         muscleEvent:FireServer("punch", "rightHand")
     end
-    
-    -- Backup touch method
-    pcall(function()
-        local targetChar = target.Character
-        local myChar = LocalPlayer.Character
-        if targetChar and myChar then
-            local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
-            local leftHand = myChar:FindFirstChild("LeftHand")
-            if targetHRP and leftHand then
-                firetouchinterest(targetHRP, leftHand, 0)
-                firetouchinterest(targetHRP, leftHand, 1)
-            end
-        end
-    end)
 end
 
--- Simple UI
+-- UI
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/ISPPs54/Ui/refs/heads/main/eeee", true))()
 local Window = Library:AddWindow("Miyavi-AK", {
     main_color = Color3.fromRGB(255, 0, 0),
-    min_size = Vector2.new(320, 180),
+    min_size = Vector2.new(300, 150),
     can_resize = false
 })
 
 local MainTab = Window:AddTab("Main")
-MainTab:AddLabel("Kill All Mode").TextSize = 24
+MainTab:AddLabel("KILL ALL").TextSize = 24
 
-local statusLabel = MainTab:AddLabel("Status: Starting...")
-local timerLabel = MainTab:AddLabel(string.format("Server Hop: %ds", _G.serverHopDelay))
+local statusLabel = MainTab:AddLabel("Status: Loading...")
+local timerLabel = MainTab:AddLabel(string.format("Hop: %ds", _G.serverHopDelay))
 
--- Main kill loop
+-- Start countdown immediately
 task.spawn(function()
-    statusLabel.Text = "✅ Status: Running"
-    
-    -- Ensure character loads first
-    LocalPlayer.CharacterAdded:Wait()
-    task.wait(1)
+    for i = _G.serverHopDelay, 1, -1 do
+        timerLabel.Text = string.format("Hop: %ds", i)
+        print("⏱️ Server hop in " .. i .. "s")
+        task.wait(1)
+    end
+    statusLabel.Text = "🚀 HOPPING!"
+    serverHop()
+end)
+
+-- Kill loop
+task.spawn(function()
+    getCharacter()
     autoEquipPunch()
+    statusLabel.Text = "✅ Killing all"
     
     while true do
         for _, player in ipairs(Players:GetPlayers()) do
@@ -128,27 +120,17 @@ task.spawn(function()
     end
 end)
 
--- Character respawn handler
+-- Respawn
 LocalPlayer.CharacterAdded:Connect(function()
     task.wait(1)
     autoEquipPunch()
-    statusLabel.Text = "✅ Status: Running (Respawned)"
+    statusLabel.Text = "✅ Killing all (respawned)"
 end)
 
 -- Anti-AFK
 LocalPlayer.Idled:Connect(function()
-    VirtualUser:CaptureController()
-    VirtualUser:ClickButton2(Vector2.new())
+    game:GetService("VirtualUser"):CaptureController()
+    game:GetService("VirtualUser"):ClickButton2(Vector2.new())
 end)
 
--- Cleanup on GUI close
-game:GetService("CoreGui").ChildRemoved:Connect(function(child)
-    if child.Name:find("Miyavi") then
-        _G.killAllEnabled = false
-    end
-end)
-
-print("✅ Miyavi-AK Loaded")
-print("🎯 Kill All: ACTIVE")
-print("⏱️ Server Hop: " .. _G.serverHopDelay .. " seconds")
-print("🔧 Auto-Equip: ENABLED")
+print("✅ Loaded - 10s hop | Auto-equip | Instant kill")
