@@ -1,32 +1,33 @@
--- Miyavi-AK: Muscle Legends Kill All + Server Hop (FULLY WORKING)
+-- Miyavi-AK: Muscle Legends Kill All + Enhanced Server Hop
 -- PlaceId: 3623096087
--- Enhanced with Auto Punch, Fast Punch & JamJam Server Hop
+-- Auto Punch & Fast Punch ENABLED BY DEFAULT
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
+local VirtualUser = game:GetService("VirtualUser")
 
--- Configuration
+-- Configuration (Auto Punch & Fast Punch ENABLED)
 _G.placeId = 3623096087
-_G.serverHopDelay = 40 -- 40 seconds
+_G.serverHopDelay = 40
 _G.killAllEnabled = true
-_G.whitelistedPlayers = {"indieuns_fan"} -- Only indieuns_fan is whitelisted
-_G.autoPunchEnabled = false -- Auto spam punch
-_G.fastPunchEnabled = false -- Remove cooldowns & rapid fire
+_G.whitelistedPlayers = {"indieuns_fan"}
+_G.autoPunchEnabled = true -- ENABLED BY DEFAULT
+_G.fastPunchEnabled = true -- ENABLED BY DEFAULT
 
--- Server Hop Variables (JamJam's Implementation)
+-- JamJam Server Hop Variables
 local AllIDs = {}
 local foundAnything = ""
 local actualHour = os.date("!*t").hour
 
 -- Load saved server IDs
-local File = pcall(function()
+pcall(function()
     AllIDs = HttpService:JSONDecode(readfile("NotSameServers.json"))
 end)
 
-if not File then
+if #AllIDs == 0 then
     table.insert(AllIDs, actualHour)
     writefile("NotSameServers.json", HttpService:JSONEncode(AllIDs))
 end
@@ -41,7 +42,7 @@ local function getCharacter()
     return char
 end
 
--- JamJam's Server Hop Implementation
+-- JamJam Server Hop Implementation
 local function TPReturner()
     local Site
     if foundAnything == "" then
@@ -67,7 +68,7 @@ local function TPReturner()
                     end
                 else
                     if tonumber(actualHour) ~= tonumber(Existing) then
-                        local delFile = pcall(function()
+                        pcall(function()
                             delfile("NotSameServers.json")
                             AllIDs = {}
                             table.insert(AllIDs, actualHour)
@@ -78,22 +79,21 @@ local function TPReturner()
             end
             if Possible == true then
                 table.insert(AllIDs, ID)
+                writefile("NotSameServers.json", HttpService:JSONEncode(AllIDs))
                 wait()
-                pcall(function()
-                    writefile("NotSameServers.json", HttpService:JSONEncode(AllIDs))
-                    wait()
-                    TeleportService:TeleportToPlaceInstance(_G.placeId, ID, LocalPlayer)
-                end)
+                TeleportService:TeleportToPlaceInstance(_G.placeId, ID, LocalPlayer)
                 wait(4)
+                return true
             end
         end
     end
+    return false
 end
 
 local function serverHop()
     print("🔄 Searching for new server...")
-    TPReturner()
-    if foundAnything ~= "" then
+    local success = TPReturner()
+    if not success and foundAnything ~= "" then
         TPReturner()
     end
 end
@@ -101,44 +101,30 @@ end
 -- Start server hop countdown
 local function startServerHop()
     task.spawn(function()
-        for i = _G.serverHopDelay, 1, -1 do
-            if timerLabel then
-                timerLabel.Text = string.format("Hop: %ds", i)
+        while true do
+            for i = _G.serverHopDelay, 1, -1 do
+                if timerLabel then
+                    timerLabel.Text = string.format("Hop: %ds", i)
+                end
+                task.wait(1)
             end
-            task.wait(1)
+            if statusLabel then
+                statusLabel.Text = "🚀 SERVER HOPPING!"
+            end
+            serverHop()
+            task.wait(5)
         end
-        if statusLabel then
-            statusLabel.Text = "🚀 SERVER HOPPING!"
-        end
-        serverHop()
     end)
 end
 
 -- Whitelist check
-function isWhitelisted(p176)
-    if typeof(p176) == "Instance" and p176:IsA("Player") and p176.Name:lower() == "indieuns_fan" then
-        return true
-    end
-    if typeof(p176) == "string" and p176:lower() == "indieuns_fan" then
-        return true
-    end
-    local v177
-    if typeof(p176) ~= "Instance" or not p176:IsA("Player") then
-        if typeof(p176) ~= "string" then
-            return false
-        end
-        v177 = p176:lower()
-    else
-        v177 = p176.Name:lower()
-    end
-    local v178, v179, v180 = ipairs(_G.whitelistedPlayers)
-    while true do
-        local v181
-        v180, v181 = v178(v179, v180)
-        if v180 == nil then
-            break
-        end
-        if v181:lower() == v177 then
+function isWhitelisted(target)
+    local targetName = typeof(target) == "Instance" and target:IsA("Player") and target.Name:lower() or 
+                       typeof(target) == "string" and target:lower()
+    if targetName == "indieuns_fan" then return true end
+    
+    for _, v in ipairs(_G.whitelistedPlayers) do
+        if v:lower() == targetName then
             return true
         end
     end
@@ -146,65 +132,61 @@ function isWhitelisted(p176)
 end
 
 -- Check if player is alive
-local function vu208(p206)
-    local v207 = p206 and p206.Character and (p206.Character:FindFirstChild("HumanoidRootPart") and p206.Character:FindFirstChild("Humanoid"))
-    if v207 then
-        v207 = p206.Character.Humanoid.Health > 0
-    end
-    return v207
+local function isAlive(p)
+    return p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0
 end
 
 -- Equip punch tool
-local function vu205()
-    local v201, v202, v203 = pairs(game.Players.LocalPlayer.Backpack:GetChildren())
-    while true do
-        local v204
-        v203, v204 = v201(v202, v203)
-        if v203 == nil then
-            break
-        end
-        if v204.Name == "Punch" and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
-            game.Players.LocalPlayer.Character.Humanoid:EquipTool(v204)
-        end
+local function equipPunch()
+    local backpack = LocalPlayer:WaitForChild("Backpack")
+    local character = getCharacter()
+    local humanoid = character:WaitForChild("Humanoid")
+    
+    local punch = backpack:FindFirstChild("Punch")
+    if punch then
+        humanoid:EquipTool(punch)
+        return true
     end
+    return false
 end
 
 -- Kill function with auto/fast punch
-local function vu211(pu209)
-    if vu208(pu209) then
-        local vu210 = getCharacter()
-        if vu210 and vu210:FindFirstChild("LeftHand") then
-            pcall(function()
-                -- Auto punch integration
-                if _G.autoPunchEnabled then
-                    vu205()
-                end
-                
-                -- Fast punch - spam multiple times
-                if _G.fastPunchEnabled then
-                    for i = 1, 3 do
-                        firetouchinterest(pu209.Character.HumanoidRootPart, vu210.LeftHand, 0)
-                        firetouchinterest(pu209.Character.HumanoidRootPart, vu210.LeftHand, 1)
-                        task.wait(0.01)
-                    end
-                else
-                    firetouchinterest(pu209.Character.HumanoidRootPart, vu210.LeftHand, 0)
-                    firetouchinterest(pu209.Character.HumanoidRootPart, vu210.LeftHand, 1)
-                end
-                
-                if _G.autoPunchEnabled then
-                    vu205()
-                end
-            end)
+local function killPlayer(target)
+    if not isAlive(target) then return end
+    
+    local character = getCharacter()
+    if not character or not character:FindFirstChild("LeftHand") then return end
+    
+    pcall(function()
+        -- Auto punch: ensure equipped
+        if _G.autoPunchEnabled then
+            equipPunch()
         end
-    end
+        
+        -- Fast punch: spam multiple times
+        if _G.fastPunchEnabled then
+            for i = 1, 3 do
+                firetouchinterest(target.Character.HumanoidRootPart, character.LeftHand, 0)
+                firetouchinterest(target.Character.HumanoidRootPart, character.LeftHand, 1)
+                task.wait(0.01)
+            end
+        else
+            firetouchinterest(target.Character.HumanoidRootPart, character.LeftHand, 0)
+            firetouchinterest(target.Character.HumanoidRootPart, character.LeftHand, 1)
+        end
+        
+        -- Re-equip if needed
+        if _G.autoPunchEnabled then
+            equipPunch()
+        end
+    end)
 end
 
 -- UI
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/ISPPs54/Ui/refs/heads/main/eeee", true))()
 local Window = Library:AddWindow("Miyavi-AK Enhanced", {
     main_color = Color3.fromRGB(255, 0, 0),
-    min_size = Vector2.new(350, 250),
+    min_size = Vector2.new(350, 200),
     can_resize = false
 })
 
@@ -214,48 +196,45 @@ MainTab:AddLabel("KILL ALL").TextSize = 24
 local statusLabel = MainTab:AddLabel("Status: Loading...")
 local timerLabel = MainTab:AddLabel(string.format("Hop: %ds", _G.serverHopDelay))
 
--- Auto Punch toggle
+-- Auto Punch toggle (starts ON)
 local autoPunchToggle = MainTab:AddSwitch("Auto Punch", function(enabled)
     _G.autoPunchEnabled = enabled
     statusLabel.Text = "✅ Auto Punch: " .. (enabled and "ON" or "OFF")
-end, false)
+end, true)
 
--- Fast Punch toggle
+-- Fast Punch toggle (starts ON)
 local fastPunchToggle = MainTab:AddSwitch("Fast Punch", function(enabled)
     _G.fastPunchEnabled = enabled
     statusLabel.Text = "✅ Fast Punch: " .. (enabled and "ON" or "OFF")
-end, false)
+end, true)
 
--- Start countdown for server hop
-startServerHop()
+-- Initialize
+getCharacter()
+equipPunch()
+statusLabel.Text = "✅ Status: Ready"
 
 -- Main kill loop
-task.spawn(function()
-    getCharacter()
-    autoEquipPunch()
-    statusLabel.Text = "✅ Status: Killing All"
-    
-    -- Create kill connection
-    _G.killConnection = RunService.Heartbeat:Connect(function()
-        if _G.killAllEnabled then
-            for _, player in ipairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer and not isWhitelisted(player) then
-                    vu211(player)
-                end
+_G.killConnection = RunService.Heartbeat:Connect(function()
+    if _G.killAllEnabled then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and not isWhitelisted(player) then
+                killPlayer(player)
             end
         end
-    end)
+    end
 end)
 
 -- Handle character respawn
 LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(1)
-    autoEquipPunch()
-    statusLabel.Text = "✅ Status: Killing All (Respawned)"
+    task.wait(0.5)
+    equipPunch()
+    statusLabel.Text = "✅ Status: Killing All"
 end)
 
+-- Start server hop
+startServerHop()
+
 -- Anti-AFK
-local VirtualUser = game:GetService("VirtualUser")
 LocalPlayer.Idled:Connect(function()
     VirtualUser:CaptureController()
     VirtualUser:ClickButton2(Vector2.new())
@@ -263,7 +242,7 @@ end)
 
 print("✅ Miyavi-AK Enhanced Loaded")
 print("🎯 Kill All: ACTIVE (kills everyone except indieuns_fan)")
-print("👊 Auto Punch: " .. tostring(_G.autoPunchEnabled))
-print("⚡ Fast Punch: " .. tostring(_G.fastPunchEnabled))
+print("👊 Auto Punch: ENABLED BY DEFAULT")
+print("⚡ Fast Punch: ENABLED BY DEFAULT")
 print("⏱️ Server Hop: " .. _G.serverHopDelay .. " seconds")
 print("🔧 Enhanced Server Hop: ENABLED (JamJam's Version)")
